@@ -6,38 +6,35 @@ import java.io.*;
 
 public class CookieServlet extends HttpServlet {
 
-    private HttpServletRequest req;
-    private HttpServletResponse resp;
 
     @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         doGet(req, resp);
     }
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        this.req = req;
-        this.resp = resp;
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+
 
         String login = req.getParameter("login");
         String password = req.getParameter("password");
 
-        signIn(login, password);
+        signIn(login, password, req, resp);
     }
 
-    public void signIn(String login, String password) throws IOException {
-        if (isPasswordRemember()) {
-            if (isInCookies(login)) toWelclomePage(login);
-            else if (checkValid(login, password)) {
+    private void signIn(String login, String password, HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        if (isPasswordRemember(req)) {
+            if (isInCookies(login, req)) toWelclomePage(login,resp);
+            else if (checkValid(login, password, req, resp)) {
                 resp.addCookie(new Cookie(login, password));
-                toWelclomePage(login);
+                toWelclomePage(login,resp);
             }
         } else {
-            if (checkValid(login, password)) toWelclomePage(login);
+            if (checkValid(login, password, req, resp)) toWelclomePage(login,resp);
         }
     }
 
-    public void toWelclomePage(String login) throws IOException {
+    private void toWelclomePage(String login, HttpServletResponse resp) throws IOException {
         PrintWriter out = resp.getWriter();
         out.print("<html><body>");
         out.print("<h1>Welcome, " + login + " </h1></br>");
@@ -45,7 +42,7 @@ public class CookieServlet extends HttpServlet {
         out.close();
     }
 
-    public boolean checkValid(String login, String password) {
+    private boolean checkValid(String login, String password, HttpServletRequest req, HttpServletResponse resp) {
         boolean hasLogin = false;
         try (BufferedReader br = new BufferedReader(new FileReader(getServletContext().getRealPath("/users.csv")))) {
             String line;
@@ -56,13 +53,13 @@ public class CookieServlet extends HttpServlet {
                     if (password.equals(user[1])) {
                         return true;
                     } else {
-                        checkErrorsInCookies(login);
+                        checkErrorsInCookies(login, req, resp);
                     }
                     break;
                 }
             }
             if (!hasLogin) {
-                addUser();
+                addUser(resp);
             }
 
         } catch (IOException e) {
@@ -71,9 +68,9 @@ public class CookieServlet extends HttpServlet {
         return false;
     }
 
-    public void checkErrorsInCookies(String login) throws IOException {
+    private void checkErrorsInCookies(String login, HttpServletRequest req, HttpServletResponse resp) throws IOException {
         Integer errors = 3;
-        if (isInCookies(login + "Fails")) {
+        if (isInCookies(login + "Fails", req)) {
             Cookie[] cookies = req.getCookies();
             for (Cookie ck : cookies) {
                 if (ck.getName().equals(login + "Fails")) {
@@ -87,20 +84,20 @@ public class CookieServlet extends HttpServlet {
             resp.addCookie(new Cookie(login + "Fails", errors.toString()));
         }
 
-        if (errors.intValue() == 0) {
+        if (errors == 0) {
             deleteUser(login);
             renameFile();
             resp.sendRedirect("/createNewUser.html");
         } else {
-            resp.sendError(404, "Password not correct. " + errors + " attemtps remaining");
+            resp.sendError(404, "Password not correct. " + errors + " attempts remaining");
         }
     }
 
-    public void addUser() throws IOException {
+    private void addUser(HttpServletResponse resp) throws IOException {
         resp.sendRedirect("/createNewUser.html");
     }
 
-    public boolean isInCookies(String item) {
+    private boolean isInCookies(String item, HttpServletRequest req) {
         Cookie[] cookies = req.getCookies();
         for (Cookie ck : cookies) {
             if (ck.getName().equals(item)) {
@@ -110,15 +107,14 @@ public class CookieServlet extends HttpServlet {
         return false;
     }
 
-    public boolean isPasswordRemember() {
+    private boolean isPasswordRemember(HttpServletRequest req) {
         String flag = req.getParameter("savePassword");
-        if (flag == null) return false;
-        else return true;
+        return flag != null;
     }
 
-    public void deleteUser(String login) throws IOException {
+    private void deleteUser(String login) throws IOException {
         try (BufferedReader br = new BufferedReader(new FileReader(getServletContext().getRealPath("/users.csv")));
-             BufferedWriter bw = new BufferedWriter(new FileWriter(getServletContext().getRealPath("/~users.csv"), false))){
+             BufferedWriter bw = new BufferedWriter(new FileWriter(getServletContext().getRealPath("/~users.csv"), false))) {
             String line;
 
             while ((line = br.readLine()) != null) {
@@ -130,12 +126,12 @@ public class CookieServlet extends HttpServlet {
         }
     }
 
-    public void renameFile() throws IOException {
+    private void renameFile() throws IOException {
         try (BufferedReader reader = new BufferedReader(new FileReader(getServletContext().getRealPath("/~users.csv")));
              BufferedWriter writer = new BufferedWriter(new FileWriter(getServletContext().getRealPath("/users.csv"), false))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                writer.write(line+"\n");
+                writer.write(line + "\n");
             }
         }
     }
